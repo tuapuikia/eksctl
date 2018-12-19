@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	. "github.com/weaveworks/eksctl/pkg/ami"
 	"github.com/weaveworks/eksctl/pkg/eks"
-	"github.com/weaveworks/eksctl/pkg/eks/api"
 	"github.com/weaveworks/eksctl/pkg/testutils"
 )
 
@@ -26,7 +25,9 @@ var _ = Describe("AMI Auto Resolution", func() {
 			p            *testutils.MockProvider
 			err          error
 			region       string
+			version      string
 			instanceType string
+			imageFamily  string
 			resolvedAmi  string
 			expectedAmi  string
 			imageState   string
@@ -35,12 +36,14 @@ var _ = Describe("AMI Auto Resolution", func() {
 		Context("with a valid region and N instance type", func() {
 			BeforeEach(func() {
 				region = "eu-west-1"
+				version = "1.10"
 				expectedAmi = "ami-12345"
 			})
 
 			Context("and non-gpu instance type", func() {
 				BeforeEach(func() {
 					instanceType = "t2.medium"
+					imageFamily = "AmazonLinux2"
 				})
 
 				Context("and ami is available", func() {
@@ -48,10 +51,10 @@ var _ = Describe("AMI Auto Resolution", func() {
 						imageState = "available"
 
 						_, p = createProviders()
-						addMockDescribeImages(p, "amazon-eks-node-*", expectedAmi, imageState, "2018-08-20T23:25:53.000Z")
+						addMockDescribeImages(p, "amazon-eks-node-1.10-v*", expectedAmi, imageState, "2018-08-20T23:25:53.000Z")
 
 						resolver := NewAutoResolver(p.MockEC2())
-						resolvedAmi, err = resolver.Resolve(region, instanceType)
+						resolvedAmi, err = resolver.Resolve(region, version, instanceType, imageFamily)
 					})
 
 					It("should not error", func() {
@@ -72,10 +75,10 @@ var _ = Describe("AMI Auto Resolution", func() {
 						imageState = "pending"
 
 						_, p = createProviders()
-						addMockDescribeImagesMultiple(p, "amazon-eks-node-*", []returnAmi{})
+						addMockDescribeImagesMultiple(p, "amazon-eks-node-1.10-v*", []returnAmi{})
 
 						resolver := NewAutoResolver(p.MockEC2())
-						resolvedAmi, err = resolver.Resolve(region, instanceType)
+						resolvedAmi, err = resolver.Resolve(region, version, instanceType, imageFamily)
 					})
 
 					It("should not error", func() {
@@ -110,10 +113,10 @@ var _ = Describe("AMI Auto Resolution", func() {
 							},
 						}
 
-						addMockDescribeImagesMultiple(p, "amazon-eks-node-*", images)
+						addMockDescribeImagesMultiple(p, "amazon-eks-node-1.10-v*", images)
 
 						resolver := NewAutoResolver(p.MockEC2())
-						resolvedAmi, err = resolver.Resolve(region, instanceType)
+						resolvedAmi, err = resolver.Resolve(region, version, instanceType, imageFamily)
 					})
 
 					It("should not error", func() {
@@ -140,10 +143,10 @@ var _ = Describe("AMI Auto Resolution", func() {
 						imageState = "available"
 
 						_, p = createProviders()
-						addMockDescribeImages(p, "amazon-eks-gpu-node-*", expectedAmi, imageState, "2018-08-20T23:25:53.000Z")
+						addMockDescribeImages(p, "amazon-eks-gpu-node-1.10-v*", expectedAmi, imageState, "2018-08-20T23:25:53.000Z")
 
 						resolver := NewAutoResolver(p.MockEC2())
-						resolvedAmi, err = resolver.Resolve(region, instanceType)
+						resolvedAmi, err = resolver.Resolve(region, version, instanceType, imageFamily)
 					})
 
 					It("should not error", func() {
@@ -168,9 +171,6 @@ func createProviders() (*eks.ClusterProvider, *testutils.MockProvider) {
 
 	c := &eks.ClusterProvider{
 		Provider: p,
-		Spec: &api.ClusterConfig{
-			Region: "eu-west-1",
-		},
 	}
 
 	return c, p

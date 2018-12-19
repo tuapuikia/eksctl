@@ -9,14 +9,17 @@ import (
 )
 
 const (
-	clusterTemplateDescription                = "EKS cluster"
-	clusterTemplateDescriptionDefaultFeatures = " (with dedicated VPC & IAM role) "
-
-	nodeGroupTemplateDescription                = "EKS nodes"
-	nodeGroupTemplateDescriptionDefaultFeatures = " (Amazon Linux 2 with SSH) "
-
-	templateDescriptionSuffix = " [created and managed by eksctl]"
+	clusterTemplateDescription   = "EKS cluster"
+	nodeGroupTemplateDescription = "EKS nodes"
+	templateDescriptionSuffix    = "[created and managed by eksctl]"
 )
+
+type awsCloudFormationResource struct {
+	Type         string
+	Properties   map[string]interface{}
+	UpdatePolicy map[string]map[string]string `json:",omitempty"`
+	DependsOn    []string                     `json:",omitempty"`
+}
 
 // ResourceSet is an interface which cluster and nodegroup builders
 // must implement
@@ -56,23 +59,6 @@ func makeStringSlice(s ...string) []*gfn.Value {
 		slice = append(slice, gfn.NewString(i))
 	}
 	return slice
-}
-
-func (r *resourceSet) newParameter(name, valueType, defaultValue string) *gfn.Value {
-	p := map[string]string{"Type": valueType}
-	if defaultValue != "" {
-		p["Default"] = defaultValue
-	}
-	r.template.Parameters[name] = p
-	return gfn.MakeRef(name)
-}
-
-func (r *resourceSet) newStringParameter(name, defaultValue string) *gfn.Value {
-	return r.newParameter(name, "String", defaultValue)
-}
-
-func (r *resourceSet) newNumberParameter(name, defaultValue string) *gfn.Value {
-	return r.newParameter(name, "Number", defaultValue)
 }
 
 // makeAutoNameTag create a new Name tag in the following format:

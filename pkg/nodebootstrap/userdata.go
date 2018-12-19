@@ -3,19 +3,18 @@ package nodebootstrap
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/pkg/errors"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/kubicorn/kubicorn/pkg/logger"
-
+	"github.com/weaveworks/eksctl/pkg/ami"
 	"github.com/weaveworks/eksctl/pkg/cloudconfig"
 	"github.com/weaveworks/eksctl/pkg/eks/api"
 	"github.com/weaveworks/eksctl/pkg/utils/kubeconfig"
 )
 
 //go:generate ${GOPATH}/bin/go-bindata -pkg ${GOPACKAGE} -prefix assets -modtime 1 -o assets.go assets
+//go:generate go run ./maxpods_generate.go
 
 const (
 	configDir            = "/etc/eksctl/"
@@ -70,68 +69,57 @@ func addFilesAndScripts(config *cloudconfig.CloudConfig, files configFiles, scri
 	return nil
 }
 
-func makeAmazonLinux2Config(config *cloudconfig.CloudConfig, spec *api.ClusterConfig) (configFiles, error) {
-	if spec.MaxPodsPerNode == 0 {
-		spec.MaxPodsPerNode = maxPodsPerNodeType[spec.NodeType]
-	}
-	// TODO: use componentconfig or kubelet config file – https://github.com/weaveworks/eksctl/issues/156
-	kubeletParams := []string{
-		fmt.Sprintf("MAX_PODS=%d", spec.MaxPodsPerNode),
-		// TODO: this will need to change when we provide options for using different VPCs and CIDRs – https://github.com/weaveworks/eksctl/issues/158
-		"CLUSTER_DNS=10.100.0.10",
-	}
-
-	metadata := []string{
-		fmt.Sprintf("AWS_DEFAULT_REGION=%s", spec.Region),
-		fmt.Sprintf("AWS_EKS_CLUSTER_NAME=%s", spec.ClusterName),
-		fmt.Sprintf("AWS_EKS_ENDPOINT=%s", spec.Endpoint),
-	}
-
+func makeClientConfigData(spec *api.ClusterConfig, nodeGroupID int) ([]byte, error) {
 	clientConfig, _, _ := kubeconfig.New(spec, "kubelet", configDir+"ca.crt")
-	kubeconfig.AppendAuthenticator(clientConfig, spec, kubeconfig.AWSIAMAuthenticator)
-
+	authenticator := kubeconfig.AWSIAMAuthenticator
+	if spec.NodeGroups[nodeGroupID].AMIFamily == ami.ImageFamilyUbuntu1804 {
+		authenticator = kubeconfig.HeptioAuthenticatorAWS
+	}
+	kubeconfig.AppendAuthenticator(clientConfig, spec, authenticator)
 	clientConfigData, err := clientcmd.Write(*clientConfig)
 	if err != nil {
 		return nil, errors.Wrap(err, "serialising kubeconfig for nodegroup")
 	}
-
-	files := configFiles{
-		kubeletDropInUnitDir: {
-			"10-eksclt.al2.conf": {isAsset: true},
-		},
-		configDir: {
-			"metadata.env": {content: strings.Join(metadata, "\n")},
-			"kubelet.env":  {content: strings.Join(kubeletParams, "\n")},
-			// TODO: https://github.com/weaveworks/eksctl/issues/161
-			"ca.crt":          {content: string(spec.CertificateAuthorityData)},
-			"kubeconfig.yaml": {content: string(clientConfigData)},
-		},
-	}
-
-	return files, nil
+	return clientConfigData, nil
 }
 
-func NewUserDataForAmazonLinux2(spec *api.ClusterConfig) (string, error) {
-	config := cloudconfig.New()
-
-	scripts := []string{
-		"bootstrap.al2.sh",
+func clusterDNS(spec *api.ClusterConfig) string {
+	// Default service network is 10.100.0.0, but it gets set 172.20.0.0 automatically when pod network
+	// is anywhere within 10.0.0.0/8
+	if spec.VPC.CIDR != nil && spec.VPC.CIDR.IP[0] == 10 {
+		return "172.20.0.10"
 	}
+	return "10.100.0.10"
+}
 
-	files, err := makeAmazonLinux2Config(config, spec)
-	if err != nil {
-		return "", err
+func makeKubeletParams(spec *api.ClusterConfig, nodeGroupID int) []string {
+	ng := spec.NodeGroups[nodeGroupID]
+	if ng.MaxPodsPerNode == 0 {
+		ng.MaxPodsPerNode = maxPodsPerNodeType[ng.InstanceType]
 	}
-
-	if err := addFilesAndScripts(config, files, scripts); err != nil {
-		return "", err
+	// TODO: use componentconfig or kubelet config file – https://github.com/weaveworks/eksctl/issues/156
+	return []string{
+		fmt.Sprintf("MAX_PODS=%d", ng.MaxPodsPerNode),
+		fmt.Sprintf("CLUSTER_DNS=%s", clusterDNS(spec)),
 	}
+}
 
-	body, err := config.Encode()
-	if err != nil {
-		return "", errors.Wrap(err, "encoding user data")
+func makeMetadata(spec *api.ClusterConfig) []string {
+	return []string{
+		fmt.Sprintf("AWS_DEFAULT_REGION=%s", spec.Metadata.Region),
+		fmt.Sprintf("AWS_EKS_CLUSTER_NAME=%s", spec.Metadata.Name),
+		fmt.Sprintf("AWS_EKS_ENDPOINT=%s", spec.Endpoint),
 	}
+}
 
-	logger.Debug("user-data = %s", string(body))
-	return string(body), nil
+// NewUserData creates new user data for a given node image family
+func NewUserData(spec *api.ClusterConfig, nodeGroupID int) (string, error) {
+	switch spec.NodeGroups[nodeGroupID].AMIFamily {
+	case ami.ImageFamilyAmazonLinux2:
+		return NewUserDataForAmazonLinux2(spec, nodeGroupID)
+	case ami.ImageFamilyUbuntu1804:
+		return NewUserDataForUbuntu1804(spec, nodeGroupID)
+	default:
+		return "", nil
+	}
 }

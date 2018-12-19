@@ -5,7 +5,6 @@ import (
 
 	. "github.com/weaveworks/eksctl/pkg/az"
 	"github.com/weaveworks/eksctl/pkg/eks"
-	"github.com/weaveworks/eksctl/pkg/eks/api"
 	"github.com/weaveworks/eksctl/pkg/testutils"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -205,6 +204,48 @@ var _ = Describe("AZ", func() {
 				Expect(p.MockEC2().AssertNumberOfCalls(GinkgoT(), "DescribeAvailabilityZones", 1)).To(BeTrue())
 			})
 		})
+
+		Context("with min required zones selector", func() {
+			var (
+				region        *string
+				selectedZones []string
+				azSelector    *AvailabilityZoneSelector
+				zones         []*ec2.AvailabilityZone
+			)
+
+			BeforeEach(func() {
+				region = aws.String("us-east-1")
+				zones = usEast1Zones(ec2.AvailabilityZoneStateAvailable)
+				_, p = createProviders()
+
+				p.MockEC2().On("DescribeAvailabilityZones",
+					mock.MatchedBy(func(input *ec2.DescribeAvailabilityZonesInput) bool {
+						filter := input.Filters[0]
+						return *filter.Name == "region-name" && *filter.Values[0] == *region
+					}),
+				).Return(&ec2.DescribeAvailabilityZonesOutput{
+					AvailabilityZones: zones,
+				}, nil)
+
+				azSelector = NewSelectorWithMinRequired(p.MockEC2())
+			})
+
+			JustBeforeEach(func() {
+				selectedZones, err = azSelector.SelectZones(*region)
+			})
+
+			It("should not error", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should have called AWS EC2 DescribeAvailabilityZones", func() {
+				Expect(p.MockEC2().AssertNumberOfCalls(GinkgoT(), "DescribeAvailabilityZones", 1)).To(BeTrue())
+			})
+
+			It("should have returned 2 availability zones", func() {
+				Expect(len(selectedZones)).To(Equal(2))
+			})
+		})
 	})
 })
 
@@ -213,9 +254,6 @@ func createProviders() (*eks.ClusterProvider, *testutils.MockProvider) {
 
 	c := &eks.ClusterProvider{
 		Provider: p,
-		Spec: &api.ClusterConfig{
-			Region: "us-west-1",
-		},
 	}
 
 	return c, p

@@ -7,12 +7,10 @@ import (
 
 	"github.com/blang/semver"
 	shellquote "github.com/kballard/go-shellquote"
+	"github.com/kris-nova/logger"
 	"github.com/pkg/errors"
-
-	"k8s.io/client-go/tools/clientcmd"
-
-	"github.com/kubicorn/kubicorn/pkg/logger"
 	"github.com/weaveworks/launcher/pkg/kubectl"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 func fmtKubectlCmd(ktl *kubectl.LocalClient, cmds ...string) string {
@@ -48,7 +46,7 @@ func CheckKubectlVersion(env []string) error {
 }
 
 // CheckAllCommands check version of kubectl, and if it can be used with either
-// of the authenticator commands; most importantly it validates if kubeclt can
+// of the authenticator commands; most importantly it validates if kubectl can
 // use kubeconfig we've created for it
 func CheckAllCommands(kubeconfigPath string, isContextSet bool, contextName string, env []string) error {
 	if err := CheckKubectlVersion(env); err != nil {

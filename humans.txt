@@ -1,4 +1,4 @@
-        _                _    _ 
+        _                _    _
        | |              | |  | |
    ___ | | __ ___   ___ | |_ | |
   / _ \| |/ // __| / __|| __|| |
@@ -21,6 +21,9 @@ Josh Carp               @jmcarp
 Kirsten Schumy          @kschumy
 Karinna Iniguez         @karinnainiguez
 Michael Seiwald         @mseiwald
+Anton Gruebel           @gruebel
+Bryan Peterson          @lazyshot
+Josue Abreu             @gotjosh
 
 /* Thanks */
 

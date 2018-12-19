@@ -9,6 +9,15 @@
 
 # Bad deps
 vendor/k8s.io/kops/docs
+vendor/github.com/docker/docker/hack
+
+# Other misc files to exclude from deps 
+vendor/k8s.io/kubernetes/.bazelrc
+vendor/k8s.io/kubernetes/.kazelcfg.json
+vendor/k8s.io/kubernetes/BUILD.bazel
+vendor/k8s.io/kubernetes/Makefile
+vendor/k8s.io/kubernetes/Makefile.generated_files
+vendor/k8s.io/kubernetes/WORKSPACE
 
 # Jekyll
 _site
@@ -18,3 +27,7 @@ _site
 
 # Test coverage output
 coverage.out
+
+# Test results
+test-results/
+

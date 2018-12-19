@@ -1,20 +1,32 @@
 package ami
 
 import (
-	"fmt"
-
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
-	"github.com/kubicorn/kubicorn/pkg/logger"
+	"github.com/kris-nova/logger"
 	"github.com/pkg/errors"
 	"github.com/weaveworks/eksctl/pkg/utils"
 )
 
 // ImageSearchPatterns is a map of image search patterns by
 // image OS family and by class
-var ImageSearchPatterns = map[string]map[int]string{
-	ImageFamilyAmazonLinux2: {
-		ImageClassGeneral: "amazon-eks-node-*",
-		ImageClassGPU:     "amazon-eks-gpu-node-*",
+var ImageSearchPatterns = map[string]map[string]map[int]string{
+	"1.10": {
+		ImageFamilyAmazonLinux2: {
+			ImageClassGeneral: "amazon-eks-node-1.10-v*",
+			ImageClassGPU:     "amazon-eks-gpu-node-1.10-v*",
+		},
+		ImageFamilyUbuntu1804: {
+			ImageClassGeneral: "ubuntu-eks/1.10.3/*",
+		},
+	},
+	"1.11": {
+		ImageFamilyAmazonLinux2: {
+			ImageClassGeneral: "amazon-eks-node-1.11-v*",
+			ImageClassGPU:     "amazon-eks-gpu-node-1.11-v*",
+		},
+		ImageFamilyUbuntu1804: {
+			ImageClassGeneral: "ubuntu-eks/1.11.5/*",
+		},
 	},
 }
 
@@ -26,15 +38,16 @@ type AutoResolver struct {
 
 // Resolve will return an AMI to use based on the default AMI for
 // each region
-func (r *AutoResolver) Resolve(region string, instanceType string) (string, error) {
-	logger.Debug("resolving AMI using AutoResolver for region %s and instanceType %s", region, instanceType)
+func (r *AutoResolver) Resolve(region, version, instanceType, imageFamily string) (string, error) {
+	logger.Debug("resolving AMI using AutoResolver for region %s, instanceType %s and imageFamily %s", region, instanceType, imageFamily)
 
-	p := ImageSearchPatterns[DefaultImageFamily][ImageClassGeneral]
+	p := ImageSearchPatterns[version][imageFamily][ImageClassGeneral]
 	if utils.IsGPUInstanceType(instanceType) {
 		var ok bool
-		p, ok = ImageSearchPatterns[DefaultImageFamily][ImageClassGPU]
+		p, ok = ImageSearchPatterns[version][imageFamily][ImageClassGPU]
 		if !ok {
-			return "", fmt.Errorf("image family %s doesn't support GPU image class", DefaultImageFamily)
+			logger.Critical("image family %s doesn't support GPU image class", imageFamily)
+			return "", NewErrFailedResolution(region, version, instanceType, imageFamily)
 		}
 	}
 

@@ -1,28 +1,19 @@
 package main
 
 import (
+	"github.com/kris-nova/logger"
 	"github.com/spf13/cobra"
 
-	"github.com/kubicorn/kubicorn/pkg/logger"
+	"github.com/weaveworks/eksctl/pkg/version"
 )
-
-//go:generate go run version_generate.go
 
 func versionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Output the version of eksctl",
 		Run: func(_ *cobra.Command, _ []string) {
-			versionInfo := map[string]string{
-				"builtAt":   builtAt,
-				"gitCommit": gitCommit,
-			}
 
-			if gitTag != "" {
-				versionInfo["gitTag"] = gitTag
-			}
-
-			logger.Info("versionInfo = %#v", versionInfo)
+			logger.Info("%#v", version.Get())
 		},
 	}
 }
